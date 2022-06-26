@@ -45,13 +45,14 @@ func CheckDbTable(db *gorm.DB, name string) error {
 			log.Println("Create Table: ", name)
 			err := db.Migrator().CreateTable(&MqttModel{})
 			if err != nil {
+				log.Println(err.Error())
 				return err
 			}
-		} else {
-			err := db.Migrator().RenameTable(&MqttModel{}, name)
-			if err != nil {
-				return err
-			}
+		}
+		err := db.Migrator().RenameTable(&MqttModel{}, name)
+		if err != nil {
+			log.Println(err.Error())
+			return err
 		}
 	}
 	return nil

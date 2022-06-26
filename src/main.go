@@ -5,7 +5,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"gorm.io/gorm"
 	"log"
-	"os"
 	"sync"
 	"time"
 )
@@ -16,21 +15,27 @@ type MqttMessageT struct {
 	Message mqtt.Message
 }
 
+// VERSION 版本号
 // ConfigFilePath 配置文件路径
 var (
+	VERSION        = "0.0.1"
 	ConfigFilePath string
 )
 
 func init() {
 	// 配置错误提示
-	mqtt.DEBUG = log.New(os.Stdout, "[mqtt][DBG]", 0)
-	mqtt.ERROR = log.New(os.Stdout, "[mqtt][ERR]", 0)
+	//mqtt.DEBUG = log.New(os.Stdout, "[mqtt][DBG]", 0)
+	//mqtt.ERROR = log.New(os.Stdout, "[mqtt][ERR]", 0)
 }
 
 func main() {
 	// 获取启动参数
 	flag.StringVar(&ConfigFilePath, "c", "", "Config File Path.")
 	flag.Parse()
+
+	// 启动输出
+	log.Printf("Start Run WolGoWeb...\r\n")
+	log.Printf("Version: %s\r\n", VERSION)
 
 	// 加载配置
 	config, err := LoadConfig(ConfigFilePath)
@@ -47,6 +52,17 @@ func main() {
 		log.Panicln("Initial Database Error:", err)
 	}
 
+	// 数据库检查或创建表
+	for _, mqttData := range config.MqttList {
+		err := CheckDbTable(db, mqttData.Table)
+		if err != nil {
+			log.Println("Database Table Error:", err.Error())
+			continue
+		}
+	}
+	tableList, _ := db.Migrator().GetTables()
+	log.Println("Database Tables:", tableList)
+
 	// 创建数据库写入任务
 	mqttChan := make(chan MqttMessageT, 128)
 	go MessageReceiveServer(db, mqttChan)
@@ -54,12 +70,6 @@ func main() {
 	// 创建监听任务
 	wg := sync.WaitGroup{}
 	for _, mqttData := range config.MqttList {
-		// 检查或创建表
-		err := CheckDbTable(db, mqttData.Table)
-		if err != nil {
-			log.Println("Database Table Error:", err.Error())
-			continue
-		}
 		// 创建MQTT监听任务
 		wg.Add(1)
 		go CreateMqttTask(mqttData, mqttChan, &wg)
